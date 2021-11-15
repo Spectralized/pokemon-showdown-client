@@ -19,7 +19,8 @@
 			'blur textarea': 'onBlurPM',
 			'click .spoiler': 'clickSpoiler',
 			'click button.formatselect': 'selectFormat',
-			'click button.teamselect': 'selectTeam'
+			'click button.teamselect': 'selectTeam',
+			'keyup input': 'selectTeammate'
 		},
 		initialize: function () {
 			this.$el.addClass('scrollable');
@@ -43,6 +44,8 @@
 				buf += '<div class="menugroup"><form class="battleform" data-search="1">';
 				buf += '<p><label class="label">Format:</label>' + this.renderFormats() + '</p>';
 				buf += '<p><label class="label">Team:</label>' + this.renderTeams() + '</p>';
+				buf += '<p><label class="label" name="partner" style="display:none">';
+				buf += 'Partner: <input name="teammate" /></label></p>';
 				buf += '<p><label class="checkbox"><input type="checkbox" name="private" ' + (Storage.prefs('disallowspectators') ? 'checked' : '') + ' /> <abbr title="You can still invite spectators by giving them the URL or using the /invite command">Don\'t allow spectators</abbr></label></p>';
 				buf += '<p><button class="button mainmenu1 big" name="search"><strong>Battle!</strong><br /><small>Find a random opponent</small></button></p></form></div>';
 			}
@@ -190,9 +193,9 @@
 				this.updateChallenge($pmWindow, parsedMessage.challenge, name, oName);
 				return;
 			}
-			var mayNotify = true;
+			var canNotify = true;
 			if (typeof parsedMessage === 'object' && 'noNotify' in parsedMessage) {
-				mayNotify = !parsedMessage.noNotify;
+				canNotify = !parsedMessage.noNotify;
 				parsedMessage = parsedMessage.message;
 			}
 			if (!$.isArray(parsedMessage)) parsedMessage = [parsedMessage];
@@ -207,7 +210,7 @@
 				app.curSideRoom.addPM(name, message, target);
 			}
 
-			if (mayNotify && !isSelf && textContent) {
+			if (canNotify && !isSelf && textContent) {
 				this.notifyOnce("PM from " + name, "\"" + textContent + "\"", 'pm');
 			}
 
@@ -262,6 +265,7 @@
 			}
 
 			app.playNotificationSound();
+			this.notifyOnce("Challenge from " + name, "Format: " + BattleLog.escapeFormat(formatName), 'challenge:' + userid);
 			var buf = '<form class="battleform"><p>' + BattleLog.escapeHTML(message || (name + ' wants to battle!')) + '</p>';
 			if (formatName) {
 				buf += '<p><label class="label">' + (teamFormat ? 'Format' : 'Game') + ':</label>' + this.renderFormats(formatName, true) + '</p>';
@@ -273,6 +277,15 @@
 			buf += '<p class="buttonbar"><button name="acceptChallenge"><strong>' + BattleLog.escapeHTML(acceptButtonLabel) + '</strong></button> <button type="button" name="rejectChallenge">' + BattleLog.escapeHTML(rejectButtonLabel) + '</button></p></form>';
 			$challenge.html(buf);
 		},
+
+		selectTeammate: function (e) {
+			if (e.currentTarget.name !== 'teammate' || e.keyCode !== 13) return;
+			var partner = toID(e.currentTarget.value);
+			if (!partner.length) return;
+			app.send('/requestpartner ' + partner + ',' + this.curFormat);
+			e.currentTarget.value = '';
+		},
+
 		openPM: function (name, dontFocus) {
 			var userid = toID(name);
 			var $pmWindow = this.$pmBox.find('.pm-window-' + userid);
@@ -1106,7 +1119,7 @@
 			});
 		}
 	}, {
-		parseChatMessage: function (message, name, timestamp, isHighlighted, $chatElem, isChat) {
+		parseChatMessage: function (message, name, timestamp, isHighlighted, $chatElem, isNotPM) {
 			var showMe = !((Dex.prefs('chatformatting') || {}).hideme);
 			var group = ' ';
 			if (!/[A-Za-z0-9]/.test(name.charAt(0))) {
@@ -1154,11 +1167,11 @@
 			case 'data-move':
 				return '[outdated message type not supported]';
 			case 'text':
-				return '<div class="chat">' + BattleLog.parseMessage(target) + '</div>';
+				return {message: '<div class="chat">' + BattleLog.parseMessage(target) + '</div>', noNotify: true};
 			case 'error':
 				return '<div class="chat message-error">' + BattleLog.escapeHTML(target) + '</div>';
 			case 'html':
-				return {message: '<div class="chat chatmessage-' + toID(name) + hlClass + mineClass + '">' + timestamp + '<strong style="' + color + '">' + clickableName + ':</strong> <em>' + BattleLog.sanitizeHTML(target) + '</em></div>', noNotify: isChat};
+				return {message: '<div class="chat chatmessage-' + toID(name) + hlClass + mineClass + '">' + timestamp + '<strong style="' + color + '">' + clickableName + ':</strong> <em>' + BattleLog.sanitizeHTML(target) + '</em></div>', noNotify: isNotPM};
 			case 'uhtml':
 			case 'uhtmlchange':
 				var parts = target.split(',');
@@ -1174,9 +1187,9 @@
 					$elements.remove();
 					$chatElem.append('<div class="chat uhtml-' + toID(parts[0]) + ' chatmessage-' + toID(name) + '">' + BattleLog.sanitizeHTML(html) + '</div>');
 				}
-				return {message: '', noNotify: isChat};
+				return {message: '', noNotify: isNotPM};
 			case 'raw':
-				return {message: '<div class="chat chatmessage-' + toID(name) + '">' + BattleLog.sanitizeHTML(target) + '</div>', noNotify: isChat};
+				return {message: '<div class="chat chatmessage-' + toID(name) + '">' + BattleLog.sanitizeHTML(target) + '</div>', noNotify: isNotPM};
 			case 'nonotify':
 				return {message: '<div class="chat">' + timestamp + BattleLog.sanitizeHTML(target) + '</div>', noNotify: true};
 			case 'challenge':
@@ -1255,6 +1268,10 @@
 				app.rooms[''].curTeamIndex = -1;
 				var $teamButton = this.sourceEl.closest('form').find('button[name=team]');
 				if ($teamButton.length) $teamButton.replaceWith(app.rooms[''].renderTeams(format));
+				var $partnerLabels = $('label[name=partner]');
+				$partnerLabels.each(function (i, label) {
+					label.style.display = BattleFormats[format].partner ? '' : 'none';
+				});
 			}
 			this.sourceEl.val(format).html(BattleLog.escapeFormat(format) || '(Select a format)');
 

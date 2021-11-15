@@ -503,7 +503,7 @@ const BattlePokemonIconIndexes: {[id: string]: number} = {
 	nohface: 1344 + 18,
 	monohm: 1344 + 19,
 	duohm: 1344 + 20,
-	// protowatt: 1344 + 21,
+	protowatt: 1344 + 21,
 	voodoll: 1344 + 22,
 	mumbao: 1344 + 23,
 	fawnifer: 1344 + 24,
@@ -515,6 +515,7 @@ const BattlePokemonIconIndexes: {[id: string]: number} = {
 	justyke: 1344 + 30,
 	solotl: 1344 + 31,
 	miasmite: 1344 + 32,
+	dorsoil: 1344 + 33,
 };
 
 const BattlePokemonIconIndexesLeft: {[id: string]: number} = {
@@ -629,11 +630,11 @@ const BattlePokemonIconIndexesLeft: {[id: string]: number} = {
 const BattleAvatarNumbers: {[k: string]: string} = {
 	1: 'lucas',
 	2: 'dawn',
-	3: 'youngster-gen4',
+	3: 'youngster-gen4dp',
 	4: 'lass-gen4dp',
 	5: 'camper',
 	6: 'picnicker',
-	7: 'bugcatcher',
+	7: 'bugcatcher-gen4dp',
 	8: 'aromalady',
 	9: 'twins-gen4dp',
 	10: 'hiker-gen4',
@@ -888,8 +889,8 @@ const BattleAvatarNumbers: {[k: string]: string} = {
 	259: 'cyclistf',
 	260: 'cynthia',
 	261: 'emmet',
-	262: 'hilbert-dueldisk',
-	263: 'hilda-dueldisk',
+	262: 'hilbert-wonderlauncher',
+	263: 'hilda-wonderlauncher',
 	264: 'hugh',
 	265: 'rosa',
 	266: 'nate',
@@ -929,6 +930,10 @@ const BattleAvatarNumbers: {[k: string]: string} = {
 	'#wally': 'wally',
 	breeder: 'pokemonbreeder',
 	breederf: 'pokemonbreederf',
+	'hilbert-dueldisk': 'hilbert-wonderlauncher',
+	'hilda-dueldisk': 'hilda-wonderlauncher',
+	'nate-dueldisk': 'nate-wonderlauncher',
+	'rosa-dueldisk': 'rosa-wonderlauncher',
 
 	1001: '#1001',
 	1002: '#1002',
@@ -1043,12 +1048,14 @@ class Item implements Effect {
 }
 
 interface MoveFlags {
-	/** Ignores a target's substitute. */
-	authentic?: 1 | 0;
+	/** The move has an animation when used on an ally. */
+	allyanim?: 1 | 0;
 	/** Power is multiplied by 1.5 when used by a Pokemon with the Strong Jaw Ability. */
 	bite?: 1 | 0;
 	/** Has no effect on Pokemon with the Bulletproof Ability. */
 	bullet?: 1 | 0;
+	/** Ignores a target's substitute. */
+	bypasssub?: 1 | 0;
 	/** The user is unable to make a move between turns. */
 	charge?: 1 | 0;
 	/** Makes contact. */
@@ -1065,8 +1072,6 @@ interface MoveFlags {
 	heal?: 1 | 0;
 	/** Can be copied by Mirror Move. */
 	mirror?: 1 | 0;
-	/** Unknown effect. */
-	mystery?: 1 | 0;
 	/** Prevented from being executed or selected in a Sky Battle. */
 	nonsky?: 1 | 0;
 	/** Has no effect on Grass-type Pokemon, Pokemon with the Overcoat Ability, and Pokemon holding Safety Goggles. */
@@ -1270,6 +1275,7 @@ class Ability implements Effect {
 	readonly desc: string;
 
 	readonly rating: number;
+	readonly isPermanent: boolean;
 	readonly isNonstandard: boolean;
 
 	constructor(id: ID, name: string, data: any) {
@@ -1283,6 +1289,7 @@ class Ability implements Effect {
 		this.shortDesc = data.shortDesc || data.desc || '';
 		this.desc = data.desc || data.shortDesc || '';
 		this.rating = data.rating || 1;
+		this.isPermanent = !!data.isPermanent;
 		this.isNonstandard = !!data.isNonstandard;
 		if (!this.gen) {
 			if (this.num >= 234) {
@@ -1334,6 +1341,7 @@ class Species implements Effect {
 	readonly color: string;
 	readonly genderRatio: Readonly<{M: number, F: number}> | null;
 	readonly eggGroups: ReadonlyArray<string>;
+	readonly tags: ReadonlyArray<string>;
 
 	// format data
 	readonly otherFormes: ReadonlyArray<string> | null;
@@ -1383,6 +1391,7 @@ class Species implements Effect {
 		this.color = data.color || '';
 		this.genderRatio = data.genderRatio || null;
 		this.eggGroups = data.eggGroups || [];
+		this.tags = data.tags || [];
 
 		this.otherFormes = data.otherFormes || null;
 		this.cosmeticFormes = data.cosmeticFormes || null;
